@@ -5,12 +5,13 @@ import os
 
 from solver import obtener_pistas, generar_candidatos
 from tablero import (
+    crear_region,
+    validar_area_coincide,
     cargar_tablero_desde_json,
     validar_todas_las_regiones,
     tablero_completamente_cubierto,
     hay_solapamiento,
 )
-
 #  CONSTANTES VISUALES
 CELDA = 80
 PALETA = [
@@ -21,27 +22,6 @@ PALETA_BORDE = [
     "#0F6E56", "#534AB7", "#854F0B", "#185FA5",
     "#993556", "#3B6D11", "#993C1D", "#888780",
 ]
-
-#  SOLUCIONADOR (solo para el botón Resolver)
-def resolver(tablero):
-    pistas = obtener_pistas(tablero)
-    candidatos_por_pista = [generar_candidatos(p, tablero) for p in pistas]
-
-    def backtrack(indice, asignadas):
-        if indice == len(pistas):
-            if tablero_completamente_cubierto(asignadas, len(tablero), len(tablero[0])):
-                return asignadas[:]
-            return None
-        for candidato in candidatos_por_pista[indice]:
-            if not any(hay_solapamiento(candidato, r) for r in asignadas):
-                asignadas.append(candidato)
-                resultado = backtrack(indice + 1, asignadas)
-                if resultado is not None:
-                    return resultado
-                asignadas.pop()
-        return None
-
-    return backtrack(0, [])
 
 
 #  CLASE PRINCIPAL
@@ -143,25 +123,45 @@ class ShikakuApp:
             fi, ff = min(f0, f1), max(f0, f1)
             ci, cf = min(c0, c1), max(c0, c1)
 
-            nueva_region = {
-                "fila_inicio":    fi,
-                "fila_fin":       ff,
-                "columna_inicio": ci,
-                "columna_fin":    cf,
-                "area": (ff - fi + 1) * (cf - ci + 1),
-            }
+            # Buscar qué pista queda dentro del rectángulo
+            pista_valor = self._obtener_pista_en_region(fi, ff, ci, cf)
 
-            # Verificar que no solapa con regiones existentes
-            if any(hay_solapamiento(nueva_region, r) for r in self.regiones):
-                self._set_mensaje("Esa región solapa con otra. Intenta de nuevo.", "#CC3333")
+            if pista_valor is None:
+                self._set_mensaje("El rectángulo no contiene ninguna pista.", "#CC3333")
             else:
-                self.regiones.append(nueva_region)
-                self._set_mensaje(
-                    f"Región agregada ({nueva_region['area']} celdas).", "#1D9E75"
-                )
+                # Usar crear_region de tablero.py — area = valor de la pista
+                nueva_region = crear_region(fi, ff, ci, cf, pista_valor)
+
+                if not validar_area_coincide(nueva_region):
+                    area_real = (ff - fi + 1) * (cf - ci + 1)
+                    self._set_mensaje(
+                        f"El área del rectángulo ({area_real}) no coincide con la pista ({pista_valor}).",
+                        "#CC3333"
+                    )
+                elif any(hay_solapamiento(nueva_region, r) for r in self.regiones):
+                    self._set_mensaje("Esa región solapa con otra. Intenta de nuevo.", "#CC3333")
+                else:
+                    self.regiones.append(nueva_region)
+                    self._set_mensaje(
+                        f"Región agregada — área {pista_valor}.", "#1D9E75"
+                    )
 
             self.celda_inicio = None
             self.dibujar()
+
+    def _obtener_pista_en_region(self, fi, ff, ci, cf):
+        """
+        Busca si hay exactamente una pista dentro del rectángulo.
+        Devuelve su valor, o None si no hay ninguna.
+        """
+        pistas_encontradas = []
+        for f in range(fi, ff + 1):
+            for c in range(ci, cf + 1):
+                if self.tablero[f][c] != 0:
+                    pistas_encontradas.append(self.tablero[f][c])
+        if len(pistas_encontradas) == 1:
+            return pistas_encontradas[0]
+        return None
 
     def _resaltar_celda(self, f, c):
         """Dibuja un borde azul sobre la celda de inicio seleccionada."""
