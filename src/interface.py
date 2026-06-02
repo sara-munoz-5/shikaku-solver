@@ -3,7 +3,7 @@ from tkinter import filedialog, messagebox
 import sys
 import os
 
-from solver import obtener_pistas, generar_candidatos
+from solver import obtener_pistas, generar_candidatos, resolver
 from tablero import (
     crear_region,
     validar_area_coincide,
